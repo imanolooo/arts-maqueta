@@ -3,6 +3,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { VRButton } from 'three/addons/webxr/VRButton.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { EXRLoader } from 'three/addons/loaders/EXRLoader.js';
 
 let scene, camera, renderer, cameraRig, controls;
 const moveSpeed = 0.05; // Velocitat del joystick
@@ -54,17 +55,58 @@ function init() {
         controls.update();
     });
 
-    // 4. IL·LUMINACIÓ AUTOMÀTICA
-    const pmremGenerator = new THREE.PMREMGenerator(renderer);
-    scene.environment = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
+// 4. IL·LUMINACIÓ AUTOMÀTICA AMB PAISATGE EXR
+    const exrLoader = new EXRLoader();
+    
+    // Canvia 'el_teu_paisatge.exr' pel nom real del teu fitxer de natura
+    exrLoader.load('textures/resting_place_2k.exr', function (texture) {
+        
+        texture.mapping = THREE.EquirectangularReflectionMapping;
+        
+        scene.environment = texture; // Il·lumina la maqueta amb la llum del prat
+        scene.background = texture;  // Mostra el cel i la gespa de fons
+        
+        console.log("Il·luminació i fons EXR carregats correctament!");
+    }, undefined, function (error) {
+        console.error("Error al carregar l'arxiu EXR:", error);
+    });
 
-    // 5. CARREGAR LA MAQUETA
+// 5. CARREGAR LA MAQUETA I CONFIGURAR ELS MATERIALS COM A MATS
     const loader = new GLTFLoader();
-    // Recorda canviar el nom del fitxer si es diu diferent!
+    
     loader.load('models/arts.glb', function (gltf) {
         const model = gltf.scene;
+
+        model.traverse(function (child) {
+            if (child.isMesh) {
+                
+                
+                if (child.material) {
+                    // Si el teu material és una llista (multimaterial), ho apliquem a tots
+                    const materials = Array.isArray(child.material) ? child.material : [child.material];
+                    
+                    materials.forEach(mat => {
+                        // 2. Configurem el material perquè utilitzi l'ombrejat suau
+                        mat.flatShading = false;
+                        
+                        // 3. Mantenim els ajustos de textura mat que volies
+                        mat.roughness = 1.0;
+                        mat.metalness = 0.0;
+                        
+                        // Si veus el relleu massa fort, pots ajustar la intensitat aquí (0.5 és un bon punt)
+                        if (mat.normalMap && mat.normalScale) {
+                            mat.normalScale.set(0.5, 0.5);
+                        }
+
+                        // AFEGEIX AQUESTA LÍNIA:
+                        mat.needsUpdate = true; // Obliga a Three.js a repintar el material amb el canvi
+                    });
+                }
+            }
+        });
+
         scene.add(model);
-        console.log("Maqueta carregada amb èxit!");
+        console.log("Maqueta mat carregada amb èxit!");
     }, undefined, function (error) {
         console.error("Error en carregar el model:", error);
     });
