@@ -3,7 +3,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { VRButton } from 'three/addons/webxr/VRButton.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { EXRLoader } from 'three/addons/loaders/EXRLoader.js';
+import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 
 let scene, camera, renderer, cameraRig, controls;
 const moveSpeed = 0.05; // Velocitat del joystick
@@ -15,6 +15,9 @@ function init() {
 
     // 1. ESCENA I RENDER
     scene = new THREE.Scene();
+
+    // Crear el gestor de càrrega
+    const manager = new THREE.LoadingManager();
     
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setPixelRatio(window.devicePixelRatio);
@@ -56,14 +59,15 @@ function init() {
     });
 
 // 4. IL·LUMINACIÓ AUTOMÀTICA AMB PAISATGE EXR
-    const exrLoader = new EXRLoader();
-    
+        
     // Canvia 'el_teu_paisatge.exr' pel nom real del teu fitxer de natura
-    exrLoader.load('textures/resting_place_2k.exr', function (texture) {
+    const rgbeLoader = new RGBELoader(manager);
+    rgbeLoader.load('textures/resting_place_2k.hdr', function (texture) {
         
         texture.mapping = THREE.EquirectangularReflectionMapping;
         
         scene.environment = texture; // Il·lumina la maqueta amb la llum del prat
+        scene.environmentIntensity = 0.7; // El valor per defecte és 1.0. Prova amb 0.5 o 0.3 per apagar-la.
         scene.background = texture;  // Mostra el cel i la gespa de fons
         
         console.log("Il·luminació i fons EXR carregats correctament!");
@@ -71,16 +75,20 @@ function init() {
         console.error("Error al carregar l'arxiu EXR:", error);
     });
 
+    // LLUM HEMISFÈRICA (Ideal per a exteriors)
+    // Paràmetres: Color del cel (blauet clar), Color del terra (verd fosc/marró), Intensitat
+    const hemiLight = new THREE.HemisphereLight(0x11111, 0xe6f2ff, 5);
+    scene.add(hemiLight);
+
 // 5. CARREGAR LA MAQUETA I CONFIGURAR ELS MATERIALS COM A MATS
-    const loader = new GLTFLoader();
+    const loader = new GLTFLoader(manager);
     
     loader.load('models/arts.glb', function (gltf) {
         const model = gltf.scene;
 
         model.traverse(function (child) {
             if (child.isMesh) {
-                
-                
+
                 if (child.material) {
                     // Si el teu material és una llista (multimaterial), ho apliquem a tots
                     const materials = Array.isArray(child.material) ? child.material : [child.material];
@@ -111,8 +119,11 @@ function init() {
         console.error("Error en carregar el model:", error);
     });
 
-    // 6. BOTÓ VR
-    document.body.appendChild(VRButton.createButton(renderer));
+    // 6. BOTÓ VR INTERLIGENT (Només apareix quan tot està carregat)
+    manager.onLoad = function ( ) {
+        console.log('Tot s\'ha carregat correctament! Activem el botó VR.');
+        document.body.appendChild(VRButton.createButton(renderer));
+    };
 
     window.addEventListener('resize', onWindowResize);
 
